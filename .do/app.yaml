@@ -1,0 +1,59 @@
+# DigitalOcean App Platform spec.
+#   doctl apps create --spec .do/app.yaml
+#   doctl apps update <app-id> --spec .do/app.yaml      # after changing instance_count
+#
+# The API (service) and the workers (worker) are separate components built from the same image, so they
+# scale independently: raise `workers.instance_count` (or WORKER_CONCURRENCY) without touching the API tier.
+name: async-job-queue
+region: blr
+
+databases:
+  - name: jobsdb
+    engine: PG
+    version: "16"
+    production: false   # dev database for the exercise; use a managed cluster with a standby in production
+
+services:
+  - name: api
+    dockerfile_path: Dockerfile
+    github:
+      repo: <your-github-user>/async-job-queue
+      branch: main
+      deploy_on_push: true
+    http_port: 8080
+    instance_size_slug: apps-s-1vcpu-1gb
+    instance_count: 2
+    health_check:
+      http_path: /actuator/health/readiness
+    envs:
+      - key: JOBQUEUE_ROLE
+        value: api
+      - key: DATABASE_URL
+        value: jdbc:postgresql://${jobsdb.HOSTNAME}:${jobsdb.PORT}/${jobsdb.DATABASE}?sslmode=require
+      - key: DATABASE_USERNAME
+        value: ${jobsdb.USERNAME}
+      - key: DATABASE_PASSWORD
+        value: ${jobsdb.PASSWORD}
+        type: SECRET
+
+workers:
+  - name: workers
+    dockerfile_path: Dockerfile
+    github:
+      repo: <your-github-user>/async-job-queue
+      branch: main
+      deploy_on_push: true
+    instance_size_slug: apps-s-1vcpu-1gb
+    instance_count: 3
+    envs:
+      - key: JOBQUEUE_ROLE
+        value: worker
+      - key: WORKER_CONCURRENCY
+        value: "8"
+      - key: DATABASE_URL
+        value: jdbc:postgresql://${jobsdb.HOSTNAME}:${jobsdb.PORT}/${jobsdb.DATABASE}?sslmode=require
+      - key: DATABASE_USERNAME
+        value: ${jobsdb.USERNAME}
+      - key: DATABASE_PASSWORD
+        value: ${jobsdb.PASSWORD}
+        type: SECRET

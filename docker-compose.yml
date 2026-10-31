@@ -1,0 +1,33 @@
+# Local stack: Postgres + API tier + worker tier.
+#   docker compose up --build
+#   docker compose up --build --scale worker=4      # scale workers without touching the API
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: jobqueue
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      retries: 20
+
+  api:
+    build: .
+    environment:
+      JOBQUEUE_ROLE: api
+      DATABASE_URL: jdbc:postgresql://postgres:5432/jobqueue
+    ports: ["8080:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  worker:
+    build: .
+    environment:
+      JOBQUEUE_ROLE: worker
+      DATABASE_URL: jdbc:postgresql://postgres:5432/jobqueue
+      WORKER_CONCURRENCY: 8
+    depends_on:
+      postgres: { condition: service_healthy }

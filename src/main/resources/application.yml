@@ -1,0 +1,69 @@
+spring:
+  application:
+    name: async-job-queue
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/jobqueue}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    hikari:
+      # Size >= worker concurrency + a few for the dispatcher, reaper, scheduler and API.
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+  flyway:
+    enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+jobqueue:
+  # all | api | worker  — see README "Scaling workers independently"
+  role: ${JOBQUEUE_ROLE:all}
+  max-payload-bytes: 262144
+  worker:
+    id: ${WORKER_ID:}
+    concurrency: ${WORKER_CONCURRENCY:8}
+    batch-size: ${WORKER_BATCH_SIZE:8}
+    poll-interval: ${WORKER_POLL_INTERVAL:500ms}
+    lease-grace: 5s
+    reaper-interval: 5s
+    shutdown-grace: 30s
+  retry:
+    base-delay: 1s
+    max-delay: 5m
+    multiplier: 2.0
+    jitter: true
+  defaults:
+    priority: 0
+    max-retries: 3
+    timeout: 30s
+  scheduler:
+    recurring-poll-interval: 1s
+    stats-refresh-interval: 5s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: async-job-queue
+      role: ${JOBQUEUE_ROLE:all}
+
+# Structured (JSON) logs: set LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs (done in Docker / App Platform).
+logging:
+  level:
+    com.jobqueue: INFO
